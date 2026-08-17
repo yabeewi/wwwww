@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>戀愛演算法：與你的365+365天</title>
+    <!-- 引入 Google 像素字體 -->
+    <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+    <style>
+        /* 基礎重置與像素風格設定 */
+        * { box-sizing: border-box; user-select: none; }
+        body {
+            margin: 0; padding: 0;
+            background-color: #2c3e50;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; font-family: 'DotGothic16', 'Courier New', monospace;
+            overflow: hidden;
+        }
+
+        /* 遊戲主容器 */
+        #game-container {
+            width: 800px; height: 600px;
+            background-color: #fce4ec; position: relative;
+            border: 4px solid #000;
+            box-shadow: 8px 8px 0px #000, inset 4px 4px 0px rgba(255,255,255,0.5);
+            overflow: hidden;
+        }
+
+        /* 畫面通用設定 */
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            background-size: cover; background-position: center;
+        }
+        .screen.active { display: flex; }
+
+        /* 像素按鈕 */
+        .pixel-btn {
+            background-color: #ff9a9e; border: 4px solid #000; color: #000;
+            padding: 10px 20px; font-family: inherit; font-size: 24px;
+            cursor: pointer; margin: 10px; box-shadow: 4px 4px 0px #000;
+            transition: transform 0.1s;
+        }
+        .pixel-btn:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px #000; }
+        .pixel-btn:hover { background-color: #ffcdd2; }
+
+        /* 對話系統 (調整位置，避免擋住立繪) */
+        #vn-screen {
+            background-color: #fff3e0; justify-content: flex-end;
+            transition: background-color 0.5s; padding-bottom: 20px;
+        }
+        
+        /* 角色立繪動態位置設定 */
+        #character-sprite {
+            font-size: 180px; 
+            position: absolute;
+            bottom: 170px;
+            left: calc(50% - 90px); /* 預設置中 (50% 減去半個字的寬度) */
+            transition: left 0.5s ease; /* 增加左右滑動的平滑過場動畫 */
+            animation: float 3s ease-in-out infinite;
+        }
+        #character-sprite.shift-left {
+            left: 20%; /* 加上此 class 時，立繪會往左移 */
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+        #dialogue-box {
+            width: 90%; 
+            height: 160px;
+            background-color: #fff; 
+            border: 4px solid #000;
+            position: absolute; 
+            bottom: 15px; 
+            padding: 25px 20px;
+            box-shadow: 6px 6px 0px #000; 
+            z-index: 10;
+        }
+        #speaker-name {
+            position: absolute; top: -24px; left: -4px;
+            background-color: #000; color: #fff;
+            padding: 4px 12px; font-size: 20px; border: 4px solid #000;
+        }
+        #dialogue-text { font-size: 22px; line-height: 1.6; color: #000; }
+        #next-indicator {
+            position: absolute; bottom: 10px; right: 15px; font-size: 20px;
+            animation: blink 1s infinite; cursor: pointer;
+        }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        #choices-container {
+            position: absolute;
+            top: 140px; 
+            right: 50px; 
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 30; 
+            display: none;
+        }
+
+        /* --- 特殊畫面樣式 --- */
+        
+        /* 交友軟體 (新增 Tinder 滑動效果樣式) */
+        #tinder-screen { background-color: #ffdde1; position: relative; overflow: hidden; }
+        .card {
+            width: 320px; height: 420px; background-color: white;
+            border: 4px solid #000; box-shadow: 8px 8px 0px #000; border-radius: 15px;
+            display: flex; flex-direction: column; align-items: center; padding: 20px;
+            position: absolute; top: 30px;
+            cursor: grab; touch-action: none; will-change: transform;
+        }
+        .card:active { cursor: grabbing; }
+        .stamp {
+            position: absolute; top: 20px; font-size: 32px; font-weight: bold;
+            border: 4px solid; padding: 4px 12px; border-radius: 8px;
+            opacity: 0; transition: opacity 0.1s ease; pointer-events: none; z-index: 10;
+        }
+        .stamp.like { right: 20px; color: #2ecc71; border-color: #2ecc71; transform: rotate(15deg); }
+        .stamp.nope { left: 20px; color: #e74c3c; border-color: #e74c3c; transform: rotate(-15deg); }
+        .card-img { font-size: 110px; margin-top: 15px; }
+        .card-name { font-size: 26px; margin-top: 15px; font-weight: bold; }
+        .card-desc { font-size: 17px; text-align: center; margin-top: 10px; color: #555; }
+        .swipe-btns { position: absolute; bottom: 30px; display: flex; gap: 50px; z-index: 50; }
+        .swipe-btn {
+            font-size: 40px; background: white; border: 4px solid #000;
+            border-radius: 50%; width: 80px; height: 80px; cursor: pointer;
+            box-shadow: 4px 4px 0px #000; transition: transform 0.1s;
+        }
+        .swipe-btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0px #000; }
+
+        /* 麥當勞霸總 */
+        .meme-mode { animation: shake 0.5s infinite, flashBg 0.2s infinite; }
+        @keyframes shake { 10%, 90% { transform: translate(-2px, -2px); } 30%, 70% { transform: translate(2px, 2px); } }
+        @keyframes flashBg { 0% { background-color: #ff0000; } 50% { background-color: #ffff00; } 100% { background-color: #00ffff; } }
+        .marquee-text {
+            position: absolute; top: 20%; width: 100%; color: #fff; font-size: 40px;
+            font-weight: bold; text-shadow: 4px 4px 0 #000; white-space: nowrap;
+            animation: slideLeft 3s linear infinite; display: none; z-index: 99;
+        }
+        @keyframes slideLeft { from { transform: translateX(100%); } to { transform: translateX(-100%); } }
+
+        /* 義大地圖 */
+        #eda-map {
+            width: 650px; height: 400px; background-color: #e0f7fa;
+            border: 4px solid #000; position: relative;
+        }
+        .map-point {
+            position: absolute; font-size: 55px; cursor: pointer; transition: transform 0.2s;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .map-point:hover { transform: scale(1.2); }
+        .map-label { font-size: 16px; background: #fff; border: 2px solid #000; padding: 2px 6px; margin-top: -10px; font-weight: bold; }
+
+        /* 尋寶遊戲 */
+        #search-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 30px;
+            width: 600px; margin-bottom: 20px;
+        }
+        .search-item {
+            background: #fff; border: 4px solid #000; height: 150px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            font-size: 60px; cursor: pointer; box-shadow: 4px 4px 0px #000; transition: 0.2s;
+        }
+        .search-item:hover { background: #ffeaa7; transform: translateY(-5px); }
+        .search-label { font-size: 20px; font-weight: bold; margin-top: 10px; }
+
+        /* 吹蠟燭 */
+        #cake-container { font-size: 120px; cursor: pointer; position: relative; }
+        .candle {
+            position: absolute; font-size: 40px; top: -30px; animation: flicker 0.2s infinite;
+        }
+        @keyframes flicker { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; transform: scale(1.1); } }
+
+        /* 結局信件 */
+        .letter-content {
+            background: #fff; color: #000; border: 4px solid #000; padding: 30px; width: 80%;
+            font-size: 22px; box-shadow: 8px 8px 0px #ff9a9e; line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+
+<!-- ============================================== -->
+<!-- 音樂設定區 -->
+<!-- ============================================== -->
+<!-- 新增 autoplay 嘗試自動播放，但仍需下方的監聽器來確保能發聲 -->
+<audio id="main-bgm" src="https://cdn.pixabay.com/download/audio/2026/04/20/audio_09beec2bbd.mp3?filename=the_mountain-cartoon-522446.mp3" loop autoplay></audio>
+<!-- 替換為本機路徑，注意格式為 file:/// -->
+<audio id="memeBgm" src="file:///C:/gamebbbbbbb/bgm.mp3"></audio>
+
+<div id="game-container">
+    <div id="flash-effect" class="screen" style="background: white; z-index: 100;"></div>
+    <div id="queen-music" class="marquee-text">🎵 Queen - Kiss 磅礡響起 🎵</div>
+
+    <!-- 標題 -->
+    <div id="screen-title" class="screen active">
+        <h1 style="font-size: 48px; text-align: center; margin-bottom: 50px; text-shadow: 4px 4px 0px #fff;">戀愛演算法<br><span style="font-size:30px; color:#e74c3c;">與你的365+365天</span></h1>
+        <button class="pixel-btn" onclick="startGame()">START GAME 💖</button>
+    </div>
+
+    <!-- 交友軟體 -->
+    <div id="screen-tinder" class="screen">
+        <h2 style="position: absolute; top: 10px; z-index: 0;">Tinder</h2>
+        <div class="card" id="card3" style="z-index: 1;">
+            <div class="stamp like">LIKE</div>
+            <div class="stamp nope">NOPE</div>
+            <div class="card-img">👦</div>
+            <div class="card-name">那個他, 24</div>
+            <div class="card-desc">喜歡漢堡、去遊樂園，還有...喜歡你。</div>
+        </div>
+        <div class="card" id="card2" style="z-index: 2;">
+            <div class="stamp like">LIKE</div>
+            <div class="stamp nope">NOPE</div>
+            <div class="card-img">🗿</div>
+            <div class="card-name">大屌哥, 20</div>
+            <div class="card-desc">......(太屌了不愛說話)</div>
+        </div>
+        <div class="card" id="card1" style="z-index: 3;">
+            <div class="stamp like">LIKE</div>
+            <div class="stamp nope">NOPE</div>
+            <div class="card-img">👽</div>
+            <div class="card-name">蛇精男, 18</div>
+            <div class="card-desc">尋找幫我拍照的美女 最好陪我過夜🍆🥵</div>
+        </div>
+        <div class="swipe-btns">
+            <button class="swipe-btn" onclick="buttonSwipe('left')" style="color: #e74c3c;">❌</button>
+            <button class="swipe-btn" onclick="buttonSwipe('right')" style="color: #2ecc71;">💚</button>
+        </div>
+    </div>
+
+    <!-- VN 對話畫面 -->
+    <div id="screen-vn" class="screen">
+        <div id="character-sprite">👦</div>
+        <div id="choices-container"></div>
+        <div id="dialogue-box" onclick="advanceDialogue()">
+            <div id="speaker-name">Name</div>
+            <div id="dialogue-text">Dialogue text goes here...</div>
+            <div id="next-indicator">▼</div>
+        </div>
+    </div>
+
+    <!-- 義大地圖 -->
+    <div id="screen-map" class="screen" style="background-color: #fdf5e6;">
+        <h2>義大世界 2週年紀念！</h2>
+        <div id="eda-map">
+            <div style="position:absolute; top: 10px; left: 10px; font-size: 20px; font-weight:bold;">遊樂園導覽圖</div>
+            <div class="map-point" style="top: 80px; left: 100px;" onclick="selectMap('carousel')">
+                🎠<span class="map-label">旋轉木馬</span>
+            </div>
+            <div class="map-point" style="top: 150px; left: 300px;" onclick="selectMap('haunted')">
+                👻<span class="map-label">驚悚鬼屋</span>
+            </div>
+            <div class="map-point" style="bottom: 50px; right: 100px;" onclick="selectMap('ferris')">
+                🎡<span class="map-label">摩天輪</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 尋寶遊戲畫面 -->
+    <div id="screen-search" class="screen" style="background-color: #e8f8f5;">
+        <h2>🤫 尋找生日禮物！</h2>
+        <p style="margin-bottom: 20px;">點擊房間裡的地方，看看禮物藏在哪？</p>
+        <div id="search-grid">
+            <div class="search-item" onclick="checkGift('sofa')">🛋️<div class="search-label">沙發縫隙</div></div>
+            <div class="search-item" onclick="checkGift('desk')">🪑<div class="search-label">書桌上</div></div>
+            <div class="search-item" onclick="checkGift('plant')">🪴<div class="search-label">盆栽旁</div></div>
+            <div class="search-item" onclick="checkGift('wardrobe')">🚪<div class="search-label">大衣櫃</div></div>
+        </div>
+    </div>
+
+    <!-- 吹蠟燭畫面 -->
+    <div id="screen-birthday" class="screen" style="background-color: #2c3e50; color: white;">
+        <h2>🎂 生日快樂！ 🎂</h2>
+        <p style="margin-bottom: 40px;">請壽星點擊蛋糕吹熄蠟燭吧！</p>
+        <div id="cake-container" onclick="blowCandles()">
+            <div class="candle" id="c1" style="left: 10px;">🔥</div>
+            <div class="candle" id="c2" style="left: 55px;">🔥</div>
+            <div class="candle" id="c3" style="left: 100px;">🔥</div>
+            🎂
+        </div>
+    </div>
+
+    <!-- 結局信件 -->
+    <div id="screen-letter" class="screen" style="background-color: #1a1a1a;">
+        <div class="letter-content">
+            <h3 style="margin-top:0;">給最特別的壽星呆呆阿珠鼻鼻：</h3>
+            <p>從去年尼的生日到現在已經又一年了</p>
+            <p>這 365+365 天裡，每一個有你的日子都充滿驚喜與笑聲。</p>
+            <p>生日快樂！未來的每一年，讓我為你準備最棒的驚喜！💖</p>
+            <p style="text-align: right; margin-top: 40px;">—— 最愛你的妳</p>
+        </div>
+        <button class="pixel-btn" onclick="location.reload()" style="margin-top: 30px;">重新回味</button>
+    </div>
+</div>
+
+<script>
+    // --- 8-bit 音效生成器 (Web Audio API) ---
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+
+    function playSound(type) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        const now = audioCtx.currentTime;
+        if (type === 'click') {
+            osc.type = 'square'; osc.frequency.setValueAtTime(600, now);
+            osc.frequency.exponentialRampToValueAtTime(800, now + 0.1);
+            gainNode.gain.setValueAtTime(0.2, now); gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+            osc.start(now); osc.stop(now + 0.1);
+        } else if (type === 'swipe-left') {
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, now);
+            gainNode.gain.setValueAtTime(0.2, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.2);
+            osc.start(now); osc.stop(now + 0.2);
+        } else if (type === 'swipe-right') {
+            osc.type = 'sine'; osc.frequency.setValueAtTime(800, now);
+            osc.frequency.setValueAtTime(1200, now + 0.1);
+            gainNode.gain.setValueAtTime(0.2, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.3);
+            osc.start(now); osc.stop(now + 0.3);
+        } else if (type === 'match') {
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(440, now);
+            osc.frequency.setValueAtTime(554, now + 0.15);
+            osc.frequency.setValueAtTime(659, now + 0.3);
+            gainNode.gain.setValueAtTime(0.3, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.6);
+            osc.start(now); osc.stop(now + 0.6);
+        } else if (type === 'error') {
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(200, now); osc.frequency.setValueAtTime(150, now + 0.15);
+            gainNode.gain.setValueAtTime(0.3, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.3);
+            osc.start(now); osc.stop(now + 0.3);
+        }
+    }
+
+    // --- Tinder 手勢拖拽模組 ---
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    let currentX = 0, currentY = 0;
+    let activeCard = null;
+
+    function initTinderCards() {
+        const cards = document.querySelectorAll('.card');
+        cards.forEach(card => {
+            card.addEventListener('mousedown', startDrag);
+            card.addEventListener('touchstart', startDrag, { passive: true });
+        });
+    }
+
+    function startDrag(e) {
+        if (currentCardIndex > 3) return;
+        activeCard = document.getElementById('card' + currentCardIndex);
+        if (!activeCard) return;
+
+        isDragging = true;
+        const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+        const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+        
+        startX = clientX;
+        startY = clientY;
+        activeCard.style.transition = 'none';
+
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('touchmove', onDrag, { passive: true });
+        document.addEventListener('mouseup', endDrag);
+        document.addEventListener('touchend', endDrag);
+    }
+
+    function onDrag(e) {
+        if (!isDragging || !activeCard) return;
+
+        const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+        const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+
+        currentX = clientX - startX;
+        currentY = clientY - startY;
+
+        const rotate = currentX * 0.08;
+        activeCard.style.transform = `translate(${currentX}px, ${currentY}px) rotate(${rotate}deg)`;
+
+        const likeStamp = activeCard.querySelector('.stamp.like');
+        const nopeStamp = activeCard.querySelector('.stamp.nope');
+
+        if (currentX > 20) {
+            if (likeStamp) likeStamp.style.opacity = Math.min(currentX / 100, 1);
+            if (nopeStamp) nopeStamp.style.opacity = 0;
+        } else if (currentX < -20) {
+            if (nopeStamp) nopeStamp.style.opacity = Math.min(Math.abs(currentX) / 100, 1);
+            if (likeStamp) likeStamp.style.opacity = 0;
+        } else {
+            if (likeStamp) likeStamp.style.opacity = 0;
+            if (nopeStamp) nopeStamp.style.opacity = 0;
+        }
+    }
+
+    function endDrag() {
+        if (!isDragging || !activeCard) return;
+        isDragging = false;
+
+        document.removeEventListener('mousemove', onDrag);
+        document.removeEventListener('touchmove', onDrag);
+        document.removeEventListener('mouseup', endDrag);
+        document.removeEventListener('touchend', endDrag);
+
+        const threshold = 100;
+
+        if (currentX > threshold) {
+            executeSwipe('right');
+        } else if (currentX < -threshold) {
+            executeSwipe('left');
+        } else {
+            activeCard.style.transition = 'transform 0.3s ease';
+            activeCard.style.transform = 'translate(0px, 0px) rotate(0deg)';
+            const stamps = activeCard.querySelectorAll('.stamp');
+            stamps.forEach(s => s.style.opacity = 0);
+        }
+    }
+
+    function buttonSwipe(direction) {
+        activeCard = document.getElementById('card' + currentCardIndex);
+        if (!activeCard) return;
+        executeSwipe(direction);
+    }
+
+    function executeSwipe(direction) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        playSound(direction === 'left' ? 'swipe-left' : 'swipe-right');
+
+        const card = activeCard;
+        const flyX = direction === 'right' ? 600 : -600;
+        const rotate = direction === 'right' ? 30 : -30;
+
+        const stamp = card.querySelector(`.stamp.${direction === 'right' ? 'like' : 'nope'}`);
+        if (stamp) stamp.style.opacity = 1;
+
+        card.style.transition = 'transform 0.4s ease, opacity 0.3s ease';
+        card.style.transform = `translate(${flyX}px, ${currentY || 0}px) rotate(${rotate}deg)`;
+        card.style.opacity = '0';
+
+        setTimeout(() => {
+            card.style.display = 'none';
+            currentCardIndex++;
+            currentX = 0; 
+            currentY = 0;
+
+            if (currentCardIndex === 4) {
+                if (direction === 'left') {
+                    alert('系統提示：這個人太帥了，您的手指不聽使喚地向左滑了！');
+                }
+                setTimeout(() => { 
+                    playSound('match'); 
+                    alert('💞 IT\'S A MATCH! 💞'); 
+                    startVisualNovel('cafe'); 
+                }, 400);
+            }
+        }, 300);
+    }
+
+    // --- 劇情資料 ---
+    let currentCardIndex = 1; let currentDialogueIndex = 0; let activeScript = [];
+    const storyScripts = {
+        cafe: [
+            { bg: '#ffeaa7', sprite: '👦', name: '他', text: '嗨！終於見面了，今天天氣真好。' },
+            { type: 'choice', choices: [
+                { text: '穿了甜美洋裝 👗', next: 'cafe_sweet' }, { text: '穿了休閒風格 👖', next: 'cafe_casual' }
+            ]}
+        ],
+        cafe_sweet: [
+            { bg: '#ffeaa7', sprite: '👦', name: '他', text: '這件洋裝超適合妳！我都看傻了。我們去吃點東西吧！', action: 'go_to_mcdonalds' }
+        ],
+        cafe_casual: [
+            { bg: '#ffeaa7', sprite: '👦', name: '他', text: '這身打扮很休閒好看！跟妳在一起感覺很輕鬆。走吧！', action: 'go_to_mcdonalds' }
+        ],
+        mcdonalds: [
+            { bg: '#ff7675', sprite: '👦', name: '他', text: '對了，妳知道吃漢堡可以看出一個人的個性嗎?' },
+            { bg: '#ff7675', sprite: '👦', name: '他', text: '兩隻手代表普通人，一手代表....' },
+            { bg: '#ff7675', sprite: '👩', name: '妳', text: '? (單手吃漢堡)', action: 'meme_mode' },
+            { bg: 'meme', sprite: '😎💘', name: '他', text: '「代表...是我的愛人 請跟我交往!!!」' },
+            { type: 'choice', choices: [
+                { text: '感動到哭並答應 😭', next: 'mc_accept' }, { text: '搶走漢堡咬一口再答應 🍔', next: 'mc_steal' }
+            ]}
+        ],
+        mc_accept: [
+            { bg: '#ff7675', sprite: '👦', name: '他', text: '太好了！我會說到做到的！', action: 'end_meme' },
+            { bg: '#000', sprite: '⏳', name: '系統', text: '【獲得成就：麥當勞甜心】\n時光飛逝，轉眼間來到了交往兩週年...', action: 'go_to_eda' }
+        ],
+        mc_steal: [
+            { bg: '#ff7675', sprite: '👦', name: '他', text: '喂！那是我的大麥克！...不過算了，妳答應就好！', action: 'end_meme' },
+            { bg: '#000', sprite: '⏳', name: '系統', text: '【獲得成就：麥當勞甜心】\n時光飛逝，轉眼間來到了交往兩週年...', action: 'go_to_eda' }
+        ],
+        eda_carousel: [
+            { bg: '#74b9ff', sprite: '🎠', name: '他', text: '旋轉木馬好有童話感！快看鏡頭，我幫妳拍一張！' },
+            { bg: '#74b9ff', sprite: '👦', name: '他', text: '拍得很完美！還有哪裡想去的嗎？', action: 'back_to_map' }
+        ],
+        eda_haunted: [
+            { bg: '#2d3436', sprite: '👻', name: '他', text: '鬼屋？我才不怕呢，我保護妳... 哇啊啊啊剛那是什麼！' },
+            { bg: '#2d3436', sprite: '👦', name: '他', text: '咳咳，沒事，剛剛只是地板滑了一下。下一個設施去哪？', action: 'back_to_map' }
+        ],
+        eda_ferris: [
+            { bg: '#192a56', sprite: '🎡', name: '他', text: '升到最高點了，夜景好美。我們來拍張合照吧！3...2...1...' },
+            { bg: '#192a56', sprite: '📸', name: '系統', text: '（喀嚓！獲得合照）', action: 'take_photo' }
+        ],
+        birthday_start: [
+            { bg: '#fff', sprite: '👦', name: '他', text: '今天義大真的好好玩，謝謝妳陪我！' },
+            { bg: '#fff', sprite: '👩', name: '妳', text: '等一下，今天還沒結束喔。祝你生日快樂！' },
+            { bg: '#fff', sprite: '👩', name: '妳', text: '我把禮物藏在房間裡了，想拿到禮物就自己找出來吧！', action: 'start_search' }
+        ],
+        found_gift: [
+            { bg: '#fff', sprite: '🎁', name: '他', text: '找到了！這禮物也太大盒了吧！謝謝妳！' },
+            { bg: '#fff', sprite: '👩', name: '妳', text: '打開看看喜歡嗎？另外...還有一樣東西！', action: 'show_cake' }
+        ]
+    };
+
+    // --- 遊戲邏輯 ---
+    function switchScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+    }
+
+    function startGame() { 
+        playSound('click'); 
+        switchScreen('screen-tinder'); 
+        initTinderCards(); // 初始化手勢拖拽
+
+        // 確保點擊 Start Game 時音樂一定在播放
+        let bgm = document.getElementById('main-bgm');
+        if (bgm.paused) {
+            bgm.volume = 0.4;
+            bgm.play().catch(e => console.log("播放被阻擋", e));
+        }
+    }
+
+    // === 全域自動解鎖音樂監聽器 ===
+    // 當玩家一打開網頁，隨便點擊畫面的任何地方，音樂就會立刻開始播放
+    document.addEventListener('click', function unlockAudio() {
+        let bgm = document.getElementById('main-bgm');
+        if (bgm.paused) {
+            bgm.volume = 0.4;
+            bgm.play().then(() => {
+                // 成功播放後移除監聽器，避免重複觸發
+                document.removeEventListener('click', unlockAudio);
+            }).catch(e => console.log("等待互動解鎖中...", e));
+        }
+    }, { once: true });
+
+    function startVisualNovel(scriptKey) {
+        switchScreen('screen-vn');
+        activeScript = storyScripts[scriptKey];
+        currentDialogueIndex = 0; renderDialogue();
+    }
+
+    function renderDialogue() {
+        let line = activeScript[currentDialogueIndex];
+        let choicesContainer = document.getElementById('choices-container');
+        let nextBtn = document.getElementById('next-indicator');
+        let characterSprite = document.getElementById('character-sprite'); // 取得立繪元素
+
+        if (line.type === 'choice') {
+            document.getElementById('dialogue-box').style.pointerEvents = 'none';
+            nextBtn.style.display = 'none';
+            
+            // 出現選項時，立繪向左移動
+            characterSprite.classList.add('shift-left'); 
+
+            choicesContainer.innerHTML = ''; choicesContainer.style.display = 'flex';
+            line.choices.forEach(choice => {
+                let btn = document.createElement('button');
+                btn.className = 'pixel-btn'; btn.innerText = choice.text;
+                btn.onclick = () => {
+                    playSound('click');
+                    document.getElementById('dialogue-box').style.pointerEvents = 'auto';
+                    choicesContainer.style.display = 'none'; nextBtn.style.display = 'block';
+                    startVisualNovel(choice.next);
+                };
+                choicesContainer.appendChild(btn);
+            });
+            return;
+        }
+
+        // 一般對話時，確保立繪恢復置中
+        characterSprite.classList.remove('shift-left'); 
+
+        if (line.bg !== 'meme') document.getElementById('screen-vn').style.backgroundColor = line.bg || '#fff3e0';
+        characterSprite.innerText = line.sprite || '👦';
+        document.getElementById('speaker-name').innerText = line.name || '???';
+        document.getElementById('dialogue-text').innerText = '';
+        
+        let text = line.text; let i = 0;
+        document.getElementById('dialogue-box').style.pointerEvents = 'none';
+        function typeWriter() {
+            if (i < text.length) {
+                document.getElementById('dialogue-text').innerHTML += text.charAt(i);
+                i++; setTimeout(typeWriter, 30);
+            } else { document.getElementById('dialogue-box').style.pointerEvents = 'auto'; }
+        }
+        typeWriter();
+
+        if (line.action) handleAction(line.action);
+    }
+
+    function advanceDialogue() {
+        if(document.getElementById('dialogue-box').style.pointerEvents === 'none') return;
+        playSound('click');
+        currentDialogueIndex++;
+        if (currentDialogueIndex < activeScript.length) renderDialogue();
+    }
+
+    let queenInterval;
+    function handleAction(action) {
+        let container = document.getElementById('game-container');
+        let mainBgm = document.getElementById('main-bgm');
+        let memeBgm = document.getElementById('memeBgm'); // 修正 ID 抓取問題，確保和上方設定的一致
+
+        switch(action) {
+            case 'go_to_mcdonalds': setTimeout(() => startVisualNovel('mcdonalds'), 1500); break;
+            case 'meme_mode':
+                container.classList.add('meme-mode'); document.getElementById('queen-music').style.display = 'block';
+                document.getElementById('screen-vn').style.backgroundColor = 'transparent';
+                queenInterval = setInterval(() => { playSound('swipe-left'); }, 400);
+                
+                // 暫停原本 BGM，切換為迷因音樂
+                mainBgm.pause();
+                memeBgm.volume = 0.5;
+                memeBgm.play().catch(e => console.log(e));
+                break;
+            case 'end_meme':
+                container.classList.remove('meme-mode'); document.getElementById('queen-music').style.display = 'none';
+                clearInterval(queenInterval);
+                
+                // 停止迷因音樂，恢復原本 BGM
+                memeBgm.pause();
+                memeBgm.currentTime = 0; // 音樂重製回開頭
+                mainBgm.play().catch(e => console.log(e));
+                break;
+            case 'go_to_eda': setTimeout(() => switchScreen('screen-map'), 1500); break;
+            case 'back_to_map': setTimeout(() => switchScreen('screen-map'), 1500); break;
+            case 'take_photo':
+                let flash = document.getElementById('flash-effect');
+                flash.style.display = 'block'; playSound('click');
+                setTimeout(() => { flash.style.display = 'none'; setTimeout(() => startVisualNovel('birthday_start'), 1000); }, 200);
+                break;
+            case 'start_search': setTimeout(() => switchScreen('screen-search'), 1500); break;
+            case 'show_cake': setTimeout(() => switchScreen('screen-birthday'), 1500); break;
+        }
+    }
+
+    function selectMap(place) {
+        playSound('click');
+        if (place === 'carousel') startVisualNovel('eda_carousel');
+        else if (place === 'haunted') startVisualNovel('eda_haunted');
+        else if (place === 'ferris') startVisualNovel('eda_ferris');
+    }
+
+    function checkGift(place) {
+        if (place === 'sofa') { playSound('error'); alert('👦 他：沙發縫隙只有幾塊零錢跟餅乾屑...'); }
+        else if (place === 'desk') { playSound('error'); alert('👦 他：書桌上開著妳平常整理的高比攻略手冊，但好像沒看到禮物？'); }
+        else if (place === 'plant') { playSound('error'); alert('👦 他：哇！盆栽旁邊飛出一隻小蟲！'); }
+        else if (place === 'wardrobe') { playSound('match'); startVisualNovel('found_gift'); }
+    }
+
+    function blowCandles() {
+        playSound('swipe-left'); // 模擬吹氣聲
+        document.getElementById('c1').style.display = 'none';
+        document.getElementById('c2').style.display = 'none';
+        document.getElementById('c3').style.display = 'none';
+        setTimeout(() => { playSound('match'); switchScreen('screen-letter'); }, 1500);
+    }
+</script>
+
+</body>
+</html>
